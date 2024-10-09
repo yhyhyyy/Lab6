@@ -1,0 +1,137 @@
+---
+title: "lab6"
+author: "Haoyu"
+format: html
+editor: visual
+embed-resources: true
+---
+
+## Setup packages
+```{r}
+library(tidytext)
+```
+
+## Read in Medical Transcriptions
+```{r}
+library(readr)
+library(dplyr)
+mt_samples <- read_csv("https://raw.githubusercontent.com/USCbiostats/data-science-data/master/00_mtsamples/mtsamples.csv")
+mt_samples <- mt_samples %>%
+  select(description, medical_specialty, transcription)
+head(mt_samples)
+```
+
+## Question 1: What specialties do we have?
+We can use count() from dplyr to figure out how many different catagories do we have? Are these catagories related? overlapping? evenly distributed?
+```{r}
+mt_samples %>%
+  count(medical_specialty, sort = TRUE)
+```
+We have 40 catagories. These catagories not related and overlapping to each other.But each catagory is unevenly distributed. The most one is "Surgery",which has 1,000 times, and the second is only 500 times.
+
+## Question 2
+Explain what we see from this result. Does it makes sense? What insights (if any) do we get?
+```{r}
+library(ggplot2)
+word_counts <- mt_samples %>%
+  unnest_tokens(word, transcription) %>%
+  count(word, sort = TRUE)
+top_20_words <- word_counts %>%
+  top_n(20, n) %>%
+  ggplot(aes(reorder(word, n), n)) +
+  geom_col() +
+  coord_flip() +
+  labs(title = "Top 20 Most Frequent Words", x = "Words", y = "Count")
+top_20_words
+```
+We see that the top twenty frequency words contain a large number of prepositions and quantifiers, which are not helpful in analyzing the text. Therefore, we need to delete these words.
+
+## Question 3
+```{r}
+data("stop_words")
+clean_word_counts <- mt_samples %>%
+  unnest_tokens(word, transcription) %>%
+  anti_join(stop_words) %>%
+  count(word, sort = TRUE)
+top_20_clean_words <- clean_word_counts %>%
+  top_n(20, n) %>%
+  ggplot(aes(reorder(word, n), n)) +
+  geom_col() +
+  coord_flip() +
+  labs(title = "Top 20 Words After Removing Stopwords And Numbers", x = "Words", y = "Count")
+top_20_clean_words
+```
+We can find that in Top 20 Words, there are no stop words, which is different from the previous result. From the result, the word that appears most often is "patient", and the word that appears in the top 20 frequencies is "pain" and "blood", which shows that this text is about medicine.
+
+## Question 4
+Repeat question 2, but this time tokenize into bi-grams. how does the result change if you look at tri-grams?
+```{r}
+bi_grams <- mt_samples %>%
+  unnest_ngrams(bigram, transcription, n = 2) %>%
+  count(bigram, sort = TRUE)
+
+tri_grams <- mt_samples %>%
+  unnest_ngrams(trigram, transcription, n = 3) %>%
+  count(trigram, sort = TRUE)
+
+top_20_bi_grams <- bi_grams %>%
+  top_n(20, n) %>%
+  ggplot(aes(reorder(bigram, n), n)) +
+  geom_col() +
+  coord_flip() +
+  labs(title = "Top 20 Bi-grams", x = "Bi-grams", y = "Count")
+top_20_bi_grams
+
+top_20_tri_grams <- tri_grams %>%
+  top_n(20, n) %>%
+  ggplot(aes(reorder(trigram, n), n)) +
+  geom_col() +
+  coord_flip() +
+  labs(title = "Top 20 Tri-grams", x = "Tri-grams", y = "Count")
+top_20_tri_grams
+```
+These two results are similar, because the word that appears most both include "patient".
+
+## Question 5
+Using the results you got from questions 4. Pick a word (patient) and count the words that appears after and before it.
+```{r}
+surrounding_words <- mt_samples %>%
+  unnest_tokens(word, transcription) %>%
+  mutate(next_word = lead(word)) %>%
+  filter(word == "patient") %>%
+  count(next_word, sort = TRUE)
+surrounding_words
+```
+
+## Question 6
+Which words are most used in each of the specialties. you can use group_by() and top_n() from dplyr to have the calculations be done within each specialty. Remember to remove stopwords. How about the most 5 used words?
+```{r}
+specialty_word_counts_1 <- mt_samples %>%
+  unnest_tokens(word, transcription) %>%
+  anti_join(stop_words) %>%
+  group_by(medical_specialty) %>%
+  count(word, sort = TRUE) %>%
+  top_n(1, n)
+specialty_word_counts_1
+specialty_word_counts_5 <- mt_samples %>%
+  unnest_tokens(word, transcription) %>%
+  anti_join(stop_words) %>%
+  group_by(medical_specialty) %>%
+  count(word, sort = TRUE) %>%
+  top_n(5, n)
+specialty_word_counts_5
+```
+
+## Question 7
+```{r}
+word_counts_specialty <- mt_samples %>%
+  unnest_tokens(word, transcription) %>%
+  anti_join(stop_words) %>%
+  group_by(medical_specialty, word) %>%
+  count(word, sort = TRUE)
+target_word <- "blood"
+word_usage <- word_counts_specialty %>%
+  filter(word == target_word)
+word_usage
+```
+"Blood" appears more frequently in "surgery" than other categories.
